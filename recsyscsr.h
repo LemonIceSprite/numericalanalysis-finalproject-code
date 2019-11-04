@@ -234,7 +234,116 @@ void updateY_recsys_csr(int *csrRowPtrR,int *csrColIdxR,float *csrValR, float *X
     // free(smat);
     // free(svec);
 }
+void printvecint(int *cscColPtrR,int n);
+void updateY_recsys_csc(int *cscColPtrR,int *cscRowIdxR,float *cscValR, float *X, float *Y,
+                    int m, int n, int f, float lamda,
+                    double *time_prepareA, double *time_prepareb, double *time_solver)
+{
+    // struct timeval t1, t2;
 
+    // float *smat = (float *)malloc(sizeof(float) * f * f);
+    // float *svec = (float *)malloc(sizeof(float) * f);
+#pragma omp parallel for
+    for (int i = 0; i < n; i++)
+    {
+        struct timeval t1, t2;
+        gettimeofday(&t1, NULL);
+        //printf("\n i = %i", i);
+        float *yi = &Y[i * f];
+
+        int nzc = 0;
+        nzc = cscColPtrR[i+1] - cscColPtrR[i];
+        
+        // for (int k = 0; k < m; k++)
+        //     nzc = R[k * n + i] == 0 ? nzc : nzc + 1;
+
+        float *ri = (float *)malloc(sizeof(float) * nzc);
+        int count = 0;
+        for (int k = cscColPtrR[i]; k < cscColPtrR[i]+nzc; k++)
+        {
+            ri[count] = cscValR[k];
+            count++;
+        }
+        
+        // for (int k = 0; k < m; k++)
+        // {
+        //     if (R[k * n + i] != 0)
+        //     {
+        //         ri[count] = R[k * n + i];
+        //         count++;
+        //     }
+        // }
+        // printf("\n nzc = %i, ri = \n", nzc);
+        // printvec(ri, nzc);
+
+        float *sX = (float *)malloc(sizeof(float) * nzc * f);
+        float *sXT = (float *)malloc(sizeof(float) * nzc * f);
+        count = 0;
+        for (int k = cscColPtrR[i]; k < cscColPtrR[i+1]; k++)
+        {
+            memcpy(&sX[count * f], &X[cscRowIdxR[k] * f], sizeof(float) * f);
+            count++;
+        }
+        
+        transpose(sXT, sX, nzc, f);
+        // for (int k = 0; k < m; k++)
+        // {
+        //     if (R[k * n + i] != 0)
+        //     {
+        //         memcpy(&sX[count * f], &X[k * f], sizeof(float) * f);
+        //         count++;
+        //     }
+        // }
+        // printf("\n sX = \n");
+        //printmat(sX, nzc, f);
+        float *smat = (float *)malloc(sizeof(float) * f * f);
+        float *svec = (float *)malloc(sizeof(float) * f);
+
+        matmat(smat, sXT, sX, f, nzc, f);
+        for (int k = 0; k < f; k++)
+            smat[k * f + k] += lamda;
+
+        gettimeofday(&t2, NULL);
+        // *time_prepareA += (t2.tv_sec - t1.tv_sec) * 1000.0 + (t2.tv_usec - t1.tv_usec) / 1000.0;
+
+        gettimeofday(&t1, NULL);
+        matvec(sXT, ri, svec, f, nzc);
+        gettimeofday(&t2, NULL);
+        // *time_prepareb += (t2.tv_sec - t1.tv_sec) * 1000.0 + (t2.tv_usec - t1.tv_usec) / 1000.0;
+
+        gettimeofday(&t1, NULL);
+        int cgiter = 0;
+        cg(smat, yi, svec, f, &cgiter, 100, 0.00001);
+        gettimeofday(&t2, NULL);
+        // *time_solver += (t2.tv_sec - t1.tv_sec) * 1000.0 + (t2.tv_usec - t1.tv_usec) / 1000.0;
+
+        //printf("\nsmat = \n");
+        //printmat(smat, f, f);
+
+        //printf("\nsvec = \n");
+        //printvec(svec, f);
+
+        //printf("\nyi = \n");
+        //printvec(yi, f);
+
+        free(ri);
+        free(sX);
+        free(sXT);
+
+        free(smat);
+        free(svec);
+    }
+
+    // free(smat);
+    // free(svec);
+}
+
+#include "tranpose.h"
+void printvecint(int *x, int n)
+{
+    for (int i = 0; i < n; i++)
+        printf("%d:%d\n",i, x[i]);
+}
 void als_recsys_csr(int *csrRowPtrR,int *csrColIdxR,float *csrValR, float *X, float *Y,
          int m, int n, int f, float lamda)
 {
@@ -261,9 +370,14 @@ void als_recsys_csr(int *csrRowPtrR,int *csrColIdxR,float *csrValR, float *X, fl
     double time_updatey = 0;
     double time_validate = 0;
 
+    int *cscRowIdxR = (int *)malloc(sizeof(int) * nnzR);
+    int *cscColPtrR = (int *)malloc(sizeof(int) * (n+1));
+    float *cscValR = (float *)malloc(sizeof(float) * nnzR);
+    matrix_transposition(m, n, nnzR, csrRowPtrR, csrColIdxR, csrValR, cscRowIdxR, cscColPtrR, cscValR);
+    // printvecint(cscColPtrR,(n+1));
     do
     {
-        printf("the process of updateX\n");
+        // printf("the process of updateX\n");
         // step 1. update X
         gettimeofday(&t1, NULL);
         updateX_recsys_csr(csrRowPtrR,csrColIdxR,csrValR, X, Y, m, n, f, lamda,
@@ -271,11 +385,15 @@ void als_recsys_csr(int *csrRowPtrR,int *csrColIdxR,float *csrValR, float *X, fl
         gettimeofday(&t2, NULL);
         time_updatex += (t2.tv_sec - t1.tv_sec) * 1000.0 + (t2.tv_usec - t1.tv_usec) / 1000.0;
 
-        printf("the process of updateY\n");
+        // printf("the process of updateY\n");
         // step 2. update Y
         gettimeofday(&t1, NULL);
-        updateY_recsys_csr(csrRowPtrR,csrColIdxR,csrValR, X, Y, m, n, f, lamda,
+        // updateY_recsys_csr(csrRowPtrR,csrColIdxR,csrValR, X, Y, m, n, f, lamda,
+        //                &time_updatey_prepareA, &time_updatey_prepareb, &time_updatey_solver);
+        
+        updateY_recsys_csc(cscColPtrR,cscRowIdxR,cscValR, X, Y, m, n, f, lamda,
                        &time_updatey_prepareA, &time_updatey_prepareb, &time_updatey_solver);
+        
         gettimeofday(&t2, NULL);
         time_updatey += (t2.tv_sec - t1.tv_sec) * 1000.0 + (t2.tv_usec - t1.tv_usec) / 1000.0;
 
@@ -325,7 +443,9 @@ void als_recsys_csr(int *csrRowPtrR,int *csrColIdxR,float *csrValR, float *X, fl
         iter++;
     }
     while(iter < 1000 && error > 0.0001);
-
+    free(cscColPtrR);
+    free(cscRowIdxR);
+    free(cscValR);
     //printf("\nR = \n");
     //printmat(R, m, n);
 
