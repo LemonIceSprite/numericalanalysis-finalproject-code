@@ -558,12 +558,18 @@ int main(int argc, char ** argv)
     printf ("filename = %s\n", filename);
 
     int m, n, nnzR, isSymmetricR;
+    struct timeval t1, t2;
+        gettimeofday(&t1, NULL);
 
     mmio_info(&m, &n, &nnzR, &isSymmetricR, filename);
+    // m = 480189; n = 17770; nnzR = 99072112;
     int *csrRowPtrR = (int *)malloc((m+1) * sizeof(int));
     int *csrColIdxR = (int *)malloc(nnzR * sizeof(int));
     float *csrValR    = (float *)malloc(nnzR * sizeof(float));
     mmio_data(csrRowPtrR, csrColIdxR, csrValR, filename);
+    gettimeofday(&t2, NULL);
+    double time_input = (t2.tv_sec - t1.tv_sec) * 1000.0 + (t2.tv_usec - t1.tv_usec) / 1000.0;
+    printf("input time is %f\n", time_input);
 
     //FILE *file;
     //file = fopen(filename, "r+");
