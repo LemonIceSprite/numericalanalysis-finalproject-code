@@ -19,7 +19,7 @@ void updateX_recsys_csr(int *csrRowPtrR,int *csrColIdxR,float *csrValR, float *X
 
         // find nzr (i.e., #nonzeros in the uth row of R)
         int nzr = 0;
-        nzr=csrRowPtrR[u+1]-csrRowPtrR[u];
+        nzr = csrRowPtrR[u+1] - csrRowPtrR[u];
         // for (int k = 0; k < n; k++)
         //    nzr = R[u * n + k] == 0 ? nzr : nzr + 1;
 
@@ -27,9 +27,10 @@ void updateX_recsys_csr(int *csrRowPtrR,int *csrColIdxR,float *csrValR, float *X
         float *ru = (float *)malloc(sizeof(float) * nzr);
         
         int count = 0;
-        for(int k=csrRowPtrR[u];k<csrRowPtrR[u]+nzr;k++)
+        for(int k = csrRowPtrR[u]; k < csrRowPtrR[u]+nzr; k++)
+        // for(int k = csrRowPtrR[u]; k < csrRowPtrR[u+1]; k++)
         {
-            ru[count]=csrValR[k];
+            ru[count] = csrValR[k];
             count++;
         }
 
@@ -127,11 +128,11 @@ void updateY_recsys_csr(int *csrRowPtrR,int *csrColIdxR,float *csrValR, float *X
         float *yi = &Y[i * f];
 
         int nzc = 0;
-        for(int k=0;k<csrRowPtrR[m];k++)
+        for(int k = 0; k < csrRowPtrR[m]; k++)
         {
             if(csrColIdxR[k]==i)
             {
-               nzc+=1; 
+               nzc += 1; 
             }
         }
         // for (int k = 0; k < m; k++)
@@ -139,11 +140,11 @@ void updateY_recsys_csr(int *csrRowPtrR,int *csrColIdxR,float *csrValR, float *X
 
         float *ri = (float *)malloc(sizeof(float) * nzc);
         int count = 0;
-        for(int k=0;k<csrRowPtrR[m];k++)
+        for(int k = 0; k < csrRowPtrR[m]; k++)
         {
             if(csrColIdxR[k]==i)
             {
-               ri[count]=csrValR[k];
+               ri[count] = csrValR[k];
                count++;
             }
         }
@@ -161,14 +162,14 @@ void updateY_recsys_csr(int *csrRowPtrR,int *csrColIdxR,float *csrValR, float *X
         float *sX = (float *)malloc(sizeof(float) * nzc * f);
         float *sXT = (float *)malloc(sizeof(float) * nzc * f);
         count = 0;
-        for(int k=0;k<csrRowPtrR[m];k++)
+        for(int k = 0; k < csrRowPtrR[m]; k++)
         {
             if(csrColIdxR[k]==i)
             {
                int z;
-               for(int z=1;z<m+1;z++)
+               for(z = 1; z < m+1; z++)
                {
-                   if(k<csrRowPtrR[z])
+                   if(k < csrRowPtrR[z])
                         break;
                }
                memcpy(&sX[count * f], &X[(z-1) * f], sizeof(float) * f);
@@ -318,7 +319,7 @@ void als_recsys_csr(int *csrRowPtrR,int *csrColIdxR,float *csrValR, float *X, fl
 
     //printf("\nRp = \n");
     //printmat(Rp, m, n);
-
+    printf("\nfunction : csr\n");
     printf("\nUpdate X %4.2f ms (prepare A %4.2f ms, prepare b %4.2f ms, solver %4.2f ms)\n",
            time_updatex, time_updatex_prepareA, time_updatex_prepareb, time_updatex_solver);
     printf("Update Y %4.2f ms (prepare A %4.2f ms, prepare b %4.2f ms, solver %4.2f ms)\n",
