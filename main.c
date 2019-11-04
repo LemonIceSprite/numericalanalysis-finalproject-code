@@ -6,7 +6,7 @@
 
 #include "mmio_highlevel.h"
 
-#define VALUE_Y 1
+#define VALUE_Y i
 
 void printmat(float *A, int m, int n)
 {
