@@ -6,7 +6,7 @@
 
 #include "mmio_highlevel.h"
 
-#define VALUE_Y i
+#define VALUE_Y 1
 
 void printmat(float *A, int m, int n)
 {
@@ -558,8 +558,9 @@ int main(int argc, char ** argv)
     printf ("filename = %s\n", filename);
 
     int m, n, nnzR, isSymmetricR;
+
     struct timeval t1, t2;
-        gettimeofday(&t1, NULL);
+    gettimeofday(&t1, NULL);
 
     mmio_info(&m, &n, &nnzR, &isSymmetricR, filename);
     // m = 480189; n = 17770; nnzR = 99072112;
