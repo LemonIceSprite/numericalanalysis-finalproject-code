@@ -6,7 +6,7 @@
 
 #include "mmio_highlevel.h"
 
-#define VALUE_Y i
+#define VALUE_Y 1
 
 void printmat(float *A, int m, int n)
 {
@@ -559,7 +559,8 @@ int main(int argc, char ** argv)
 
     int m, n, nnzR, isSymmetricR;
 
-    mmio_info(&m, &n, &nnzR, &isSymmetricR, filename);
+    // mmio_info(&m, &n, &nnzR, &isSymmetricR, filename);
+    m = 480189; n = 17770; nnzR = 99072112;
     int *csrRowPtrR = (int *)malloc((m+1) * sizeof(int));
     int *csrColIdxR = (int *)malloc(nnzR * sizeof(int));
     float *csrValR    = (float *)malloc(nnzR * sizeof(float));
