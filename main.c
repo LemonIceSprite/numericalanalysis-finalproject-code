@@ -564,6 +564,7 @@ int main(int argc, char ** argv)
 
     mmio_info(&m, &n, &nnzR, &isSymmetricR, filename);
     // m = 480189; n = 17770; nnzR = 99072112;
+    // 206 5575
     int *csrRowPtrR = (int *)malloc((m+1) * sizeof(int));
     int *csrColIdxR = (int *)malloc(nnzR * sizeof(int));
     float *csrValR    = (float *)malloc(nnzR * sizeof(float));
@@ -584,15 +585,15 @@ int main(int argc, char ** argv)
     // memset(R, 0, sizeof(float) * m * n);
 
     // put nonzeros into the dense form of R (the array R)
-    for (int rowidx = 0; rowidx < m; rowidx++)
-    {
-        for (int j = csrRowPtrR[rowidx]; j < csrRowPtrR[rowidx + 1]; j++)
-        {
-            int colidx = csrColIdxR[j];
-            float val = csrValR[j];
-            // R[rowidx * n + colidx] = val;
-        }
-    }
+    // for (int rowidx = 0; rowidx < m; rowidx++)
+    // {
+    //     for (int j = csrRowPtrR[rowidx]; j < csrRowPtrR[rowidx + 1]; j++)
+    //     {
+    //         int colidx = csrColIdxR[j];
+    //         float val = csrValR[j];
+    //         // R[rowidx * n + colidx] = val;
+    //     }
+    // }
 
     // read R
     //for (int i = 0; i < m; i++)

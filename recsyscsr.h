@@ -1,6 +1,92 @@
 #ifndef recsyscsr_h
 #define recsyscsr_h
 #include <omp.h>
+
+void matmat_transB_half(float *C, float *A, float *BT, int m, int k, int n)
+{
+    memset(C, 0, sizeof(float) * m * n);
+    for (int i = 0; i < m; i++)
+        for (int j = i; j < n; j++){
+            for (int kk = 0; kk < k; kk++)
+                C[i * n + j] += A[i * k + kk] * BT[j * k + kk];
+            if( j != i)
+            {
+                C[j * m + i] = C[i * n + j];
+            }
+        }
+}
+
+void matmat_transB_halfp(float *C, float *A, float *BT, int m, int k, int n)
+{
+    memset(C, 0, sizeof(float) * m * n);
+    #pragma omp parallel for
+    for (int i = 0; i < m; i++)
+        for (int j = i; j < n; j++){
+            for (int kk = 0; kk < k; kk++)
+                C[i * n + j] += A[i * k + kk] * BT[j * k + kk];
+            if( j != i)
+            {
+                C[j * m + i] = C[i * n + j];
+            }
+        }
+}
+
+void matmats(float *C, float *A, float *B, int m, int k, int n)
+{
+    memset(C, 0, sizeof(float) * m * n);
+    #pragma omp parallel for
+    for (int i = 0; i < m; i++)
+    {
+        for (int j = i; j < n; j++)   //potimized to upper triangle
+        {
+            for (int kk = 0; kk < k; kk++)
+                C[i * n + j] += A[i * k + kk] * B[kk * n + j];
+            if( j != i)
+            {
+                C[j * m + i] = C[i * n + j];
+            }
+        }
+    }
+}
+
+void matmatx(float *C, float *A, float *B, int m, int k, int n)
+{
+    memset(C, 0, sizeof(float) * m * n);
+    // #pragma omp parallel for
+    for (int i = 0; i < m; i++)
+    {
+        for (int j = i; j < n; j++)   //potimized to upper triangle
+        {
+            for (int kk = 0; kk < k; kk++)
+                C[i * n + j] += A[i * k + kk] * B[kk * n + j];
+            if( j != i)
+            {
+                C[j * m + i] = C[i * n + j];
+            }
+        }
+    }
+}
+
+// A is m x n, AT is n x m
+void transposeY(float *AT, float *A, int m, int n)
+{
+    #pragma omp parallel for
+    for (int i = 0; i < m; i++)
+        for (int j = 0; j < n; j++)
+            AT[j * m + i] = A[i * n + j];
+}
+
+void matvecY(float *A, float *x, float *y, int m, int n)
+{
+    #pragma omp parallel for
+    for (int i = 0; i < m; i++)
+    {
+        y[i] = 0;
+        for (int j = 0; j < n; j++)
+            y[i] += A[i * n + j] * x[j];
+    }
+}
+
 void updateX_recsys_csr(int *csrRowPtrR,int *csrColIdxR,float *csrValR, float *X, float *Y,
                     int m, int n, int f, float lamda,
                     double *time_prepareA, double *time_prepareb, double *time_solver)
@@ -21,20 +107,30 @@ void updateX_recsys_csr(int *csrRowPtrR,int *csrColIdxR,float *csrValR, float *X
 
         // find nzr (i.e., #nonzeros in the uth row of R)
         int nzr = 0;
-        nzr = csrRowPtrR[u+1] - csrRowPtrR[u];
+        int row_start = csrRowPtrR[u];
+        int row_end = csrRowPtrR[u+1];
+        nzr = row_end - row_start;
         // for (int k = 0; k < n; k++)
         //    nzr = R[u * n + k] == 0 ? nzr : nzr + 1;
 
         // malloc ru (i.e., uth row of R) and insert entries into it
         float *ru = (float *)malloc(sizeof(float) * nzr);
         
-        int count = 0;
-        for(int k = csrRowPtrR[u]; k < csrRowPtrR[u]+nzr; k++)
+// gettimeofday(&t2, NULL);
+// *time_prepareA += (t2.tv_sec - t1.tv_sec) * 1000.0 + (t2.tv_usec - t1.tv_usec) / 1000.0;
+// gettimeofday(&t1, NULL);
+        
+        // int count = 0;
+        // #pragma omp parallel for
+        for(int k = row_start; k < row_end; k++)
         // for(int k = csrRowPtrR[u]; k < csrRowPtrR[u+1]; k++)
         {
-            ru[count] = csrValR[k];
-            count++;
+            ru[k-row_start] = csrValR[k];
+            // count++;
         }
+// gettimeofday(&t2, NULL);
+// *time_prepareb += (t2.tv_sec - t1.tv_sec) * 1000.0 + (t2.tv_usec - t1.tv_usec) / 1000.0;
+// gettimeofday(&t1, NULL);
 
         // for (int k = 0; k < n; k++)
         // {
@@ -51,13 +147,17 @@ void updateX_recsys_csr(int *csrRowPtrR,int *csrColIdxR,float *csrValR, float *X
         float *sY = (float *)malloc(sizeof(float) * nzr * f);
         float *sYT = (float *)malloc(sizeof(float) * nzr * f);
         // fill sY, according to the sparsity of the uth row of R
-        count = 0;
-        for (int k = csrRowPtrR[u]; k < csrRowPtrR[u+1]; k++)
+
+        // count = 0;
+        // #pragma omp parallel for
+        for (int k = row_start; k < row_end; k++)
         {
-            memcpy(&sY[count * f], &Y[csrColIdxR[k] * f], sizeof(float) * f);
-            count++;
+            memcpy(&sY[(k-row_start) * f], &Y[csrColIdxR[k] * f], sizeof(float) * f);
+            // count++;
         }
-        
+// gettimeofday(&t2, NULL);
+// *time_solver += (t2.tv_sec - t1.tv_sec) * 1000.0 + (t2.tv_usec - t1.tv_usec) / 1000.0;
+// gettimeofday(&t1, NULL);
         
         // for (int k = 0; k < n; k++)
         // {
@@ -74,7 +174,7 @@ void updateX_recsys_csr(int *csrRowPtrR,int *csrColIdxR,float *csrValR, float *X
         transpose(sYT, sY, nzr, f);
 
         // multiply sYT and sY, and plus lamda * I
-        matmat(smat, sYT, sY, f, nzr, f);
+        matmat_transB_half(smat, sYT, sYT, f, nzr, f);
         for (int i = 0; i < f; i++)
             smat[i * f + i] += lamda;
 
@@ -196,7 +296,7 @@ void updateY_recsys_csr(int *csrRowPtrR,int *csrColIdxR,float *csrValR, float *X
         float *smat = (float *)malloc(sizeof(float) * f * f);
         float *svec = (float *)malloc(sizeof(float) * f);
 
-        matmat(smat, sXT, sX, f, nzc, f);
+        matmats(smat, sXT, sX, f, nzc, f);
         for (int i = 0; i < f; i++)
             smat[i * f + i] += lamda;
 
@@ -235,6 +335,7 @@ void updateY_recsys_csr(int *csrRowPtrR,int *csrColIdxR,float *csrValR, float *X
     // free(svec);
 }
 void printvecint(int *cscColPtrR,int n);
+
 void updateY_recsys_csc(int *cscColPtrR,int *cscRowIdxR,float *cscValR, float *X, float *Y,
                     int m, int n, int f, float lamda,
                     double *time_prepareA, double *time_prepareb, double *time_solver)
@@ -243,7 +344,7 @@ void updateY_recsys_csc(int *cscColPtrR,int *cscRowIdxR,float *cscValR, float *X
 
     // float *smat = (float *)malloc(sizeof(float) * f * f);
     // float *svec = (float *)malloc(sizeof(float) * f);
-#pragma omp parallel for
+// #pragma omp parallel for
     for (int i = 0; i < n; i++)
     {
         struct timeval t1, t2;
@@ -252,17 +353,20 @@ void updateY_recsys_csc(int *cscColPtrR,int *cscRowIdxR,float *cscValR, float *X
         float *yi = &Y[i * f];
 
         int nzc = 0;
-        nzc = cscColPtrR[i+1] - cscColPtrR[i];
+        int col_start = cscColPtrR[i];
+        int col_end = cscColPtrR[i+1];
+        nzc = col_end - col_start;
         
         // for (int k = 0; k < m; k++)
         //     nzc = R[k * n + i] == 0 ? nzc : nzc + 1;
 
         float *ri = (float *)malloc(sizeof(float) * nzc);
-        int count = 0;
-        for (int k = cscColPtrR[i]; k < cscColPtrR[i]+nzc; k++)
+        // int count = 0;
+        #pragma omp parallel for
+        for (int k = col_start; k < col_end; k++)
         {
-            ri[count] = cscValR[k];
-            count++;
+            ri[k-col_start] = cscValR[k];
+            // count++;
         }
         
         // for (int k = 0; k < m; k++)
@@ -278,14 +382,15 @@ void updateY_recsys_csc(int *cscColPtrR,int *cscRowIdxR,float *cscValR, float *X
 
         float *sX = (float *)malloc(sizeof(float) * nzc * f);
         float *sXT = (float *)malloc(sizeof(float) * nzc * f);
-        count = 0;
-        for (int k = cscColPtrR[i]; k < cscColPtrR[i+1]; k++)
+        // count = 0;
+        #pragma omp parallel for
+        for (int k = col_start; k < col_end; k++)
         {
-            memcpy(&sX[count * f], &X[cscRowIdxR[k] * f], sizeof(float) * f);
-            count++;
+            memcpy(&sX[(k-col_start) * f], &X[cscRowIdxR[k] * f], sizeof(float) * f);
+            // count++;
         }
         
-        transpose(sXT, sX, nzc, f);
+        transposeY(sXT, sX, nzc, f);
         // for (int k = 0; k < m; k++)
         // {
         //     if (R[k * n + i] != 0)
@@ -299,7 +404,7 @@ void updateY_recsys_csc(int *cscColPtrR,int *cscRowIdxR,float *cscValR, float *X
         float *smat = (float *)malloc(sizeof(float) * f * f);
         float *svec = (float *)malloc(sizeof(float) * f);
 
-        matmat(smat, sXT, sX, f, nzc, f);
+        matmat_transB_halfp(smat, sXT, sXT, f, nzc, f);
         for (int k = 0; k < f; k++)
             smat[k * f + k] += lamda;
 
@@ -307,7 +412,7 @@ void updateY_recsys_csc(int *cscColPtrR,int *cscRowIdxR,float *cscValR, float *X
         // *time_prepareA += (t2.tv_sec - t1.tv_sec) * 1000.0 + (t2.tv_usec - t1.tv_usec) / 1000.0;
 
         gettimeofday(&t1, NULL);
-        matvec(sXT, ri, svec, f, nzc);
+        matvecY(sXT, ri, svec, f, nzc);
         gettimeofday(&t2, NULL);
         // *time_prepareb += (t2.tv_sec - t1.tv_sec) * 1000.0 + (t2.tv_usec - t1.tv_usec) / 1000.0;
 
@@ -391,6 +496,8 @@ void als_recsys_csr(int *csrRowPtrR,int *csrColIdxR,float *csrValR, float *X, fl
         // updateY_recsys_csr(csrRowPtrR,csrColIdxR,csrValR, X, Y, m, n, f, lamda,
         //                &time_updatey_prepareA, &time_updatey_prepareb, &time_updatey_solver);
         
+        // updateX_recsys_csr(cscColPtrR,cscRowIdxR,cscValR, X, Y, n, m, f, lamda,
+        //                &time_updatey_prepareA, &time_updatey_prepareb, &time_updatey_solver);
         updateY_recsys_csc(cscColPtrR,cscRowIdxR,cscValR, X, Y, m, n, f, lamda,
                        &time_updatey_prepareA, &time_updatey_prepareb, &time_updatey_solver);
         
@@ -420,7 +527,7 @@ void als_recsys_csr(int *csrRowPtrR,int *csrColIdxR,float *csrValR, float *X, fl
                 resultXY += X[row * f + index] * Y[col * f + index];
             }
             // printf("%f %f %f %f\n",error_new,fabs(csrValR[i] - resultXY),csrValR[i],resultXY);
-            error_new += fabs(csrValR[i] - resultXY) * fabs(csrValR[i] - resultXY);
+            error_new += (csrValR[i] - resultXY) * (csrValR[i] - resultXY);
             // printf("%f\n",error_new);
         }
         
